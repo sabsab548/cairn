@@ -1,0 +1,19 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+# TODO(release): this is a stub. It does nothing yet.
+# Plan once the apps exist:
+#   1. Build a signed Android release APK / AAB.
+#   2. Build an iOS archive and upload to TestFlight.
+#   3. Create a GitHub Release with the APK attached and a changelog.
+
+jobs:
+  placeholder:
+    name: Release (not implemented)
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "TODO: see comment at the top of this file."
