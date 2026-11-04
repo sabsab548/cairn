@@ -10,7 +10,7 @@
 ├─────────────────────────────────────┤
 │ ⭐ SyncEngine (pure logic)             │   packages/sync      (CI-tested)
 │ - dedupe (F-80)                     │
-│ - latest-wins (F-81)                │
+│ - latest-wins by HLC stamp (F-81)   │
 │ - pending refs (F-82)               │
 │ - tombstones (F-41)                 │
 │ - priority queue (F-84)             │
@@ -48,9 +48,13 @@ is exercised only on the physical test bench.
 ## Data model summary
 
 - **Object ID** (4 B): `[type 1B][author 1B][counter 2B]`
-- **Point**: ID, predecessor ID (nullable), flags, lat/lon, optional expiry, short name.
-- **Message**: ID, sender, timestamp, optional ref to an object, text.
-- **Tombstone** (F-41): a Point/Message with `deleted` flag set. *(TODO)*
+- **Point**: ID, predecessor ID (nullable), flags, **version stamp**, lat/lon,
+  optional expiry, short name.
+- **Message**: ID, sender, version stamp (its `ts` is used for display),
+  optional ref to an object, text.
+- **Tombstone** (F-41): 16 B packet naming a target ID plus a version stamp that
+  competes with the target's own version. A delete is therefore just a newer
+  version (ADR-006), and deleting a mid-route point splits the chain.
 
 Full byte layout: `docs/PROTOCOL.md`.
 

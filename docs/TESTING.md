@@ -8,8 +8,11 @@ Everything that can be pure logic is pure logic, and lives in
 `packages/protocol` / `packages/sync`. On every PR:
 
 - Round-trip encode/decode for every packet kind
-- Size assertions (≤ 230 B, worst-case name)
+- Exact size assertions per packet kind (worst case pinned to PROTOCOL.md)
+- HLC: ordering, same-second counter, monotonicity (`HlcTest`)
 - Sync engine: dedupe, latest-wins, pending refs, tombstones
+- Convergence: the same versions in **every** delivery order give the same
+  state (see ADR-006 — this is the test that makes latest-wins real)
 - Android compile (once the module exists)
 - iOS framework link (once the module exists)
 

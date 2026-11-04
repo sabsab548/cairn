@@ -87,3 +87,92 @@ collisions are unlikely but not impossible.
 
 Rationale: AGPL keeps derivative *apps* open; MIT on the reference codec
 encourages third-party tooling and alternative frontends (N-09).
+
+---
+
+## ADR-006 — Latest-wins ordering (F-81)
+
+**Date:** 2026-11-04 · **Status:** Accepted
+
+### Context
+F-81 only says "for the same ID, the newest version wins" and never defines
+*newest*. The first implementation used the **local receive timestamp**, which
+is not latest-wins but last-to-arrive-wins:
+
+- two peers that heard the same two versions in opposite order kept
+  different versions (permanent divergence),
+- a neighbour relaying an old copy made the map revert,
+- two versions landing in the same millisecond dropped one of them,
+- a replayed old packet won (see `SECURITY.md`).
+
+Edits reuse the object's ID (`F-31` makes the route ID its head point's ID, and
+predecessor/reference fields point at IDs), so the ID cannot distinguish two
+versions of the same object. A version has to be carried explicitly.
+
+### Decision
+
+1. **Identity on edit.** An edit keeps the `ObjectId` and carries a new
+   version stamp. The alternative — a fresh ID per edit plus a "supersedes"
+   pointer — was rejected: it costs a packet per edit over LoRa and breaks the
+   predecessor chains F-82/F-32 depend on.
+2. **The stamp is a hybrid logical clock**, 6 bytes: physical seconds since
+   2026-01-01 plus a 16-bit counter. Ordering is lexicographic. This makes the
+   order **total**, so two peers holding the same versions always agree
+   regardless of delivery order.
+3. **Ties** (same stamp) are broken by author ID, then by content hash. The
+   last resort only matters if one writer emits two different contents with
+   one stamp — a bug or an author-ID collision (ADR-004) — but it still leaves
+   every peer with the same answer.
+4. **Any member may edit any object.** There is no ownership: §9 of the
+   Lastenheft defines trust as "whoever holds the channel key". This is what
+   makes a cross-author clock necessary instead of a per-author counter.
+5. **A tombstone is a version of its target**, not an object of its own. If it
+   wins, the payload is dropped and only `(id, stamp, author)` is kept as a
+   **floor**. A stale copy cannot resurrect the object; a newer edit can
+   undelete it.
+6. **Pending ≠ deleted.** F-82 keeps a point queued while its predecessor is
+   unknown. If the predecessor is *deleted*, the waiter is not pending any
+   more: it becomes the head of a new segment, i.e. **the route splits in
+   two**. Deleting a point in a chain stored as back-pointers breaks exactly
+   one link, so a split costs one tombstone and no other packet changes.
+7. **Everything editable.** Positions, pins and route points are all
+   `PointPacket`, so one rule covers them. Messages stay immutable (a message's
+   stamp is its send time); digest packets are not objects.
+8. **Never clamp a stamp** that is far in the future. Clamping is
+   non-monotonic and breaks convergence. Surface "a peer's clock is ~N minutes
+   ahead" instead.
+
+### Rejected alternatives
+
+| Option | Why not |
+|---|---|
+| Local receive time (previous code) | Does not converge; replays win |
+| Per-author counter (Lamport) | Converges without any clock, but "newest" becomes meaningless: a peer that never saw v4 edits from v2 and silently loses to a version it never knew |
+| Plain wall clock, seconds | Same-second edits tie, so an author's own second edit can lose to their first |
+| Immutable objects, delete + recreate | Kill the clock entirely, but a moved route point forces rewriting the whole downstream tail (O(n) packets, visible duplicate segments on peers) and two routes can never be linked |
+| Explicit link/edge records | Contradicts F-30 (pointer lives in the point) and creates two sources of truth |
+
+### Consequences
+
+- ✅ Maps converge. "Newest" means "the sender's clock says later", which is
+  what users expect, and it now holds regardless of arrival order.
+- ✅ Replay/rollback is **bounded** rather than free: anything at or below the
+  per-object floor is dropped.
+- ❌ +6 B on every point (worst case 60 → 66 B, 70 B with expiry), +2 B on
+  messages (198 B) and tombstones (16 B). Well inside the 230 B limit.
+- ❌ A phone with a badly wrong clock still wins concurrent edits within its
+  skew window. HLC does not detect skew; only the app-layer warning can.
+- ❌ No `version` byte bump — only because nothing had shipped. Any later layout
+  change bumps `version`.
+
+### Not in v1
+
+- **Group epoch / bulk clear.** Attractive as *the* cheap bulk delete (one
+  packet instead of N tombstones), but anyone with the key can wipe the whole
+  crew's map, partitions make "cleared" ambiguous, and the epoch itself needs
+  ordering on the same axis. For v1, map clutter is answered by F-40 expiry, a
+  fresh operation by a new channel (F-90), and "hide everything from before
+  today" by a purely local filter.
+- **Author-only writes for user positions** (`type 0x00`): a position is a
+  claim about a person, so a peer overwriting it is odd. In practice IDs are
+  per-author, so this only bites on an author-ID collision. Not enforced yet.

@@ -3,6 +3,9 @@
 **Status:** draft. Unknown fields MUST be skipped (forward compat). Any
 change to this file MUST ship in the same PR as a codec change and a test.
 
+> 2026-11-04: packets gained a **version stamp** (F-81). Nothing had shipped,
+> so the layouts changed in place and `version` stays `0x01`. See ADR-006.
+
 ## Transport
 
 Cairn packets travel as the payload of a Meshtastic **private application
@@ -47,25 +50,46 @@ Type tags:
 ## Flags (1 byte)
 
     bit 0  closed      (route is a polygon / area)
-    bit 1  deleted     (tombstone)
+    bit 1  deleted     (reserved — deletion travels as a Tombstone packet, F-41)
     bit 2  emergency   (F-60)
     bit 3  hasExpiry   (F-40 — optional 4 B expiry field after name)
     bit 4..7 reserved — send as 0, ignore on receive
 
+## Version stamp (F-81)
+
+Every object packet carries a 6-byte hybrid logical clock stamp:
+
+    [ sec 4B big-endian ][ count 2B big-endian ]
+
+- `sec`: the sender's time, **seconds since 2026-01-01T00:00:00Z** — the same
+  epoch a message's `ts` uses.
+- `count`: a logical counter that breaks same-second ties. It is bumped when a
+  writer produces two stamps in the same second, and when it hears a peer's
+  stamp. It never overflows into a tie: it carries into `sec` instead.
+
+Ordering is lexicographic on `(sec, count)`. Two peers that hold the same set
+of versions therefore always agree on the winner, whatever the delivery order.
+A pure wall clock is not enough — two edits in the same second would tie.
+
+Equal stamps are broken by author ID, then by content hash, so the order is
+total (see `docs/DECISIONS.md` ADR-006). Implemented by
+`org.cairn.protocol.Hlc` and `HybridClock`.
+
 ## Point body
 
-    [ id 4B ][ predecessor 4B ][ flags 1B ][ latE7 4B ][ lonE7 4B ][ nameLen 1B ][ name N B ]
+    [ id 4B ][ predecessor 4B ][ flags 1B ][ version 6B ][ latE7 4B ][ lonE7 4B ][ nameLen 1B ][ name N B ][ expiry 4B? ]
 
 - `predecessor`: `0x00000000` (the nil ID) means standalone pin or first
   route point (F-30/F-35). Otherwise the ID of the point this one chains
   from. The nil ID cannot collide with a real object because author 0 is
   reserved (see "Object ID" above).
+- `version`: see "Version stamp" above.
 - `latE7` / `lonE7`: signed 32-bit, degrees × 10^7.
 - `name`: UTF-8, 0–40 bytes.
 
-Fixed size before `name`: 20 B (including the 2-byte envelope). Worst case
-with a 40-byte name: **60 B**. That leaves 170 B of the 230 B payload free
-for multi-point packing.
+Fixed size before `name`: 26 B (including the 2-byte envelope). Worst case
+with a 40-byte name: **66 B**; with the optional expiry field: **70 B**. That
+leaves 160 B of the 230 B payload free for multi-point packing.
 
 **F-32:** multi-point route packing — not implemented yet.
 Proposed: a Route packet carries a `count` byte and delta-coded points
@@ -73,13 +97,28 @@ Proposed: a Route packet carries a `count` byte and delta-coded points
 
 ## Message body
 
-    [ id 4B ][ sender 1B ][ ts 4B ][ ref 4B ][ textLen 1B ][ text N B ]
+    [ id 4B ][ sender 1B ][ version 6B ][ ref 4B ][ textLen 1B ][ text N B ]
 
-- `ts`: seconds since `2026-01-01T00:00:00Z`. 32 bits ≈ 136 years.
+- `version.sec`: seconds since `2026-01-01T00:00:00Z`. 32 bits ≈ 136 years,
+  and it doubles as the displayed send time (F-51). `version.count` is 0 in
+  practice — messages are never edited.
 - `ref`: `0x00000000` = no reference, else an Object ID (F-52).
 - `text`: UTF-8, 1–180 bytes.
 
-Worst case: 2+4+1+4+4+1+180 = **196 B**. Fits, with headroom.
+Worst case: 2+4+1+6+4+1+180 = **198 B**. Fits, with headroom.
+
+## Tombstone body (F-41)
+
+    [ id 4B ][ target 4B ][ version 6B ]
+
+16 B. The tombstone is **not** an object of its own: `version` competes with
+the target's own version. A tombstone with a higher stamp deletes the target
+and cannot be undone by a stale copy that an offline phone still holds; a
+later edit with a higher stamp undeletes it. `id` only identifies the
+sender's tombstone (its author byte is what breaks delete/edit ties).
+
+A peer that receives a tombstone for an object it never had MUST keep the
+stamp as a floor, so the object cannot be resurrected later.
 
 ## Digest body (F-83)
 

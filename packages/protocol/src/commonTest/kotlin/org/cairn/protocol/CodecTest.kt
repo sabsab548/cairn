@@ -16,6 +16,7 @@ class CodecTest {
         id = id(1),
         predecessor = id(0, ObjectType.RoutePoint, author = 1),
         flags = Flags(closed = false, deleted = false, emergency = false),
+        version = Hlc(1_000, 0),
         latE7 = 470_123_456,
         lonE7 = 8_123_456,
         name = name,
@@ -24,7 +25,7 @@ class CodecTest {
     private fun sampleMessage() = MessagePacket(
         id = id(10, ObjectType.Message),
         senderId = 7,
-        timestampSec = 12_345,
+        version = Hlc(12_345, 0),
         referencedObject = id(1),
         text = "meet at the ridge",
     )
@@ -32,7 +33,7 @@ class CodecTest {
     private fun sampleTombstone() = TombstonePacket(
         id = id(1, ObjectType.Message),
         targetId = id(42),
-        timestampSec = 98_765,
+        version = Hlc(98_765, 0),
     )
 
     private fun sampleDigest() = DigestPacket(
@@ -72,7 +73,7 @@ class CodecTest {
         val m = MessagePacket(
             id = id(10, ObjectType.Message),
             senderId = 7,
-            timestampSec = 12345,
+            version = Hlc(12_345, 4),
             referencedObject = id(1),
             text = "meet at the ridge",
         )
@@ -84,11 +85,18 @@ class CodecTest {
         val m = MessagePacket(
             id = id(11, ObjectType.Message),
             senderId = 7,
-            timestampSec = 0,
+            version = Hlc(0, 0),
             referencedObject = null,
             text = "hi",
         )
         assertEquals(m, Codec.decode(Codec.encode(m)))
+    }
+
+    @Test
+    fun message_timestamp_is_the_physical_part_of_the_version() {
+        val m = sampleMessage().copy(version = Hlc(4_242, 9))
+        assertEquals(4_242, m.timestampSec)   // F-51 display time
+        assertEquals(4_242, (Codec.decode(Codec.encode(m)) as MessagePacket).timestampSec)
     }
 
     @Test
@@ -104,11 +112,36 @@ class CodecTest {
         val m = MessagePacket(
             id = id(12, ObjectType.Message),
             senderId = 7,
-            timestampSec = Int.MAX_VALUE,
+            version = Hlc(Int.MAX_VALUE, Hlc.MAX_COUNT),
             referencedObject = id(1),
             text = "y".repeat(Codec.MAX_TEXT_BYTES),
         )
         assertTrue(Codec.encode(m).size <= Codec.MAX_PACKET_BYTES)
+    }
+
+    /**
+     * Locks the exact sizes quoted in docs/PROTOCOL.md. If a field is added,
+     * this fails and the doc has to move with it (see the header of
+     * PROTOCOL.md).
+     */
+    @Test
+    fun worst_case_sizes_match_the_spec() {
+        val point = samplePoint(name = "x".repeat(Codec.MAX_NAME_BYTES))
+            .copy(flags = Flags(hasExpiry = true), expirySec = Int.MAX_VALUE)
+        assertEquals(70, Codec.encode(point).size)          // 2+4+4+1+6+8+1+40+4
+
+        val message = MessagePacket(
+            id = id(12, ObjectType.Message),
+            senderId = 7,
+            version = Hlc(Int.MAX_VALUE, Hlc.MAX_COUNT),
+            referencedObject = id(1),
+            text = "y".repeat(Codec.MAX_TEXT_BYTES),
+        )
+        assertEquals(198, Codec.encode(message).size)       // 2+4+1+6+4+1+180
+        assertEquals(16, Codec.encode(sampleTombstone()).size)
+        assertEquals(2 + ObjectId.SIZE + 1 + Codec.MAX_DIGEST_BYTES, Codec.encode(
+            DigestPacket(id(99, ObjectType.Message), ByteArray(Codec.MAX_DIGEST_BYTES)),
+        ).size)
     }
 
     @Test
@@ -123,7 +156,7 @@ class CodecTest {
         val m = MessagePacket(
             id = id(13, ObjectType.Message),
             senderId = 1,
-            timestampSec = 0,
+            version = Hlc(0, 0),
             referencedObject = null,
             text = "",
         )
@@ -216,9 +249,15 @@ class CodecTest {
         val t = TombstonePacket(
             id = id(1, ObjectType.Message),
             targetId = id(42),
-            timestampSec = 98765,
+            version = Hlc(98_765, 12),
         )
         assertEquals(t, Codec.decode(Codec.encode(t)))
+    }
+
+    @Test
+    fun point_version_round_trip() {
+        val p = samplePoint().copy(version = Hlc(1_700_000_000, Hlc.MAX_COUNT))
+        assertEquals(p, Codec.decode(Codec.encode(p)))
     }
 
     @Test
@@ -288,17 +327,19 @@ class CodecTest {
     fun oversized_name_on_wire_rejected() {
         val base = Codec.encode(samplePoint(name = "x".repeat(Codec.MAX_NAME_BYTES)))
         val bytes = base.copyOf(base.size + 1)
-        bytes[19] = (Codec.MAX_NAME_BYTES + 1).toByte()   // nameLen
+        // 2 (envelope) + 4 (id) + 4 (pred) + 1 (flags) + 6 (version) + 4 + 4 = 25
+        bytes[25] = (Codec.MAX_NAME_BYTES + 1).toByte()   // nameLen
         assertFailsWith<IllegalArgumentException> { Codec.decode(bytes) }
     }
 
     @Test
     fun oversized_text_on_wire_rejected() {
         val base = Codec.encode(
-            MessagePacket(id(99, ObjectType.Message), 1, 0, null, "y".repeat(Codec.MAX_TEXT_BYTES)),
+            MessagePacket(id(99, ObjectType.Message), 1, Hlc(0, 0), null, "y".repeat(Codec.MAX_TEXT_BYTES)),
         )
         val bytes = base.copyOf(base.size + 1)
-        bytes[15] = (Codec.MAX_TEXT_BYTES + 1).toByte()   // textLen
+        // 2 (envelope) + 4 (id) + 1 (sender) + 6 (version) + 4 (ref) = 17
+        bytes[17] = (Codec.MAX_TEXT_BYTES + 1).toByte()   // textLen
         assertFailsWith<IllegalArgumentException> { Codec.decode(bytes) }
     }
 }

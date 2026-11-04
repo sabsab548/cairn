@@ -17,9 +17,12 @@ Cairn is **not** a secure messenger. Be explicit about what it does not do:
   tracked in `docs/ROADMAP.md`.
 - **Traffic analysis is possible.** Positions, pin drops and message
   metadata are visible to anyone with the channel key.
-- **Replay/rollback is not prevented** in v1. A malicious peer can
-  re-broadcast old state; the sync engine's latest-wins rule will accept it.
-  Mitigation is future work (see `docs/ROADMAP.md`).
+- **Replay/rollback is bounded, not prevented.** A malicious peer can
+  re-broadcast old state, but every object carries a version stamp and the sync
+  engine keeps a floor per object (ADR-006), so anything older than what you
+  already accepted is dropped. It cannot be prevented outright: an attacker
+  who stamps a *future* version can still overwrite an object. Mitigation is
+  future work (see `docs/ROADMAP.md`).
 - **No forward secrecy.**
 
 Use Cairn only in a group you already trust. Do not use it where an

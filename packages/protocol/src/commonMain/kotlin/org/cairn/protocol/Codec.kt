@@ -57,9 +57,11 @@ object Codec {
         require(p.flags.hasExpiry == (p.expirySec != null)) {
             "hasExpiry flag (${p.flags.hasExpiry}) disagrees with expirySec (${p.expirySec})"
         }
-        // 2 + 4 + 4 + 1 + 4 + 4 + 1 + name + (expiry?)
+        // 2 + id + predecessor + flags + version + lat + lon + nameLen + name + (expiry?)
         val expirySize = if (p.expirySec != null) 4 else 0
-        val out = ByteArray(2 + ObjectId.SIZE + ObjectId.SIZE + 1 + 8 + 1 + name.size + expirySize)
+        val out = ByteArray(
+            2 + ObjectId.SIZE + ObjectId.SIZE + 1 + Hlc.SIZE + 8 + 1 + name.size + expirySize,
+        )
         var o = 0
         out[o++] = VERSION
         out[o++] = KIND_POINT
@@ -69,6 +71,7 @@ object Codec {
         predBytes.copyInto(out, o); o += ObjectId.SIZE
 
         out[o++] = p.flags.toByte()
+        p.version.toBytes().copyInto(out, o); o += Hlc.SIZE
         writeInt32(out, o, p.latE7); o += 4
         writeInt32(out, o, p.lonE7); o += 4
         out[o++] = name.size.toByte()
@@ -82,8 +85,10 @@ object Codec {
     }
 
     private fun decodePoint(b: ByteArray): PointPacket {
-        // 2 + id + predecessor + flags + lat + lon + nameLen
-        require(b.size >= 2 + ObjectId.SIZE * 2 + 1 + 4 + 4 + 1) { "point packet truncated" }
+        // 2 + id + predecessor + flags + version + lat + lon + nameLen
+        require(b.size >= 2 + ObjectId.SIZE * 2 + 1 + Hlc.SIZE + 4 + 4 + 1) {
+            "point packet truncated"
+        }
         var o = 2
         val id = ObjectId.fromBytes(b, o); o += ObjectId.SIZE
 
@@ -91,6 +96,7 @@ object Codec {
         val pred = if (predRaw == ObjectId.NONE) null else predRaw
 
         val flags = Flags.fromByte(b[o++])
+        val version = Hlc.fromBytes(b, o); o += Hlc.SIZE
         val lat = readInt32(b, o); o += 4
         val lon = readInt32(b, o); o += 4
         val nameLen = b[o++].toInt() and 0xFF
@@ -105,7 +111,7 @@ object Codec {
             require(o + 4 <= b.size) { "point expiry truncated" }
             expirySec = readInt32(b, o); o += 4
         }
-        return PointPacket(id, pred, flags, lat, lon, name, expirySec)
+        return PointPacket(id, pred, flags, version, lat, lon, name, expirySec)
     }
 
     // ------------------------------------------------------------ message
@@ -116,14 +122,14 @@ object Codec {
         require(text.size <= MAX_TEXT_BYTES) {
             "message too long: ${text.size} > $MAX_TEXT_BYTES bytes"
         }
-        // 2 + 4 (id) + 1 (sender) + 4 (ts) + 4 (ref) + 1 (len) + text
-        val out = ByteArray(2 + ObjectId.SIZE + 1 + 4 + 4 + 1 + text.size)
+        // 2 + id + sender + version (ts + counter) + ref + len + text
+        val out = ByteArray(2 + ObjectId.SIZE + 1 + Hlc.SIZE + 4 + 1 + text.size)
         var o = 0
         out[o++] = VERSION
         out[o++] = KIND_MESSAGE
         m.id.toBytes().copyInto(out, o); o += ObjectId.SIZE
         out[o++] = m.senderId
-        writeInt32(out, o, m.timestampSec); o += 4
+        m.version.toBytes().copyInto(out, o); o += Hlc.SIZE
         (m.referencedObject?.toBytes() ?: ByteArray(ObjectId.SIZE)).copyInto(out, o)
         o += ObjectId.SIZE
         out[o++] = text.size.toByte()
@@ -132,12 +138,14 @@ object Codec {
     }
 
     private fun decodeMessage(b: ByteArray): MessagePacket {
-        // 2 + id + sender + ts + ref + textLen
-        require(b.size >= 2 + ObjectId.SIZE + 1 + 4 + ObjectId.SIZE + 1) { "message packet truncated" }
+        // 2 + id + sender + version + ref + textLen
+        require(b.size >= 2 + ObjectId.SIZE + 1 + Hlc.SIZE + ObjectId.SIZE + 1) {
+            "message packet truncated"
+        }
         var o = 2
         val id = ObjectId.fromBytes(b, o); o += ObjectId.SIZE
         val sender = b[o++]
-        val ts = readInt32(b, o); o += 4
+        val version = Hlc.fromBytes(b, o); o += Hlc.SIZE
         val refRaw = ObjectId.fromBytes(b, o); o += ObjectId.SIZE
         val ref = if (refRaw == ObjectId.NONE) null else refRaw
         val len = b[o++].toInt() and 0xFF
@@ -145,7 +153,7 @@ object Codec {
         require(o + len <= b.size) { "message text truncated" }
         val text = b.copyOfRange(o, o + len).decodeToString()
         require(text.isNotEmpty()) { "empty message text" }
-        return MessagePacket(id, sender, ts, ref, text)
+        return MessagePacket(id, sender, version, ref, text)
     }
 
     // ------------------------------------------------------------ digest
@@ -181,23 +189,23 @@ object Codec {
     // ------------------------------------------------------------ tombstone
 
     private fun encodeTombstone(t: TombstonePacket): ByteArray {
-        val out = ByteArray(14) // 2 + 4 + 4 + 4
+        val out = ByteArray(2 + ObjectId.SIZE * 2 + Hlc.SIZE) // 16
         var o = 0
         out[o++] = VERSION
         out[o++] = KIND_TOMBSTONE
         t.id.toBytes().copyInto(out, o); o += ObjectId.SIZE
         t.targetId.toBytes().copyInto(out, o); o += ObjectId.SIZE
-        writeInt32(out, o, t.timestampSec); o += 4
+        t.version.toBytes().copyInto(out, o); o += Hlc.SIZE
         return out
     }
 
     private fun decodeTombstone(b: ByteArray): TombstonePacket {
-        require(b.size >= 2 + ObjectId.SIZE * 2 + 4) { "tombstone packet truncated" }
+        require(b.size >= 2 + ObjectId.SIZE * 2 + Hlc.SIZE) { "tombstone packet truncated" }
         var o = 2
         val id = ObjectId.fromBytes(b, o); o += ObjectId.SIZE
         val targetId = ObjectId.fromBytes(b, o); o += ObjectId.SIZE
-        val timestampSec = readInt32(b, o); o += 4
-        return TombstonePacket(id, targetId, timestampSec)
+        val version = Hlc.fromBytes(b, o); o += Hlc.SIZE
+        return TombstonePacket(id, targetId, version)
     }
 
     // ------------------------------------------------------------ helpers
