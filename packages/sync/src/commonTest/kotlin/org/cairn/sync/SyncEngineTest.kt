@@ -1,5 +1,6 @@
 package org.cairn.sync
 
+import org.cairn.protocol.DigestPacket
 import org.cairn.protocol.Flags
 import org.cairn.protocol.ObjectId
 import org.cairn.protocol.ObjectType
@@ -80,4 +81,17 @@ class SyncEngineTest {
         // for `second`. (The upsert for `first` is also in the list.)
         assertTrue(events.any { it is Event.PendingRefResolved })
     }
+
+    @Test
+    fun duplicate_digest_is_ignored() {
+        val e = SyncEngine { 1_000L }
+        e.ingest(sampleDigest(), receivedAtMs = 1_000L)
+        // Same content, different array instance: must still be a duplicate.
+        assertEquals(0, e.ingest(sampleDigest(), receivedAtMs = 2_000L).size)   // F-80
+    }
+
+    private fun sampleDigest() = DigestPacket(
+        id = ObjectId(ObjectType.Message, authorId = 1, counter = 5),
+        filterBytes = byteArrayOf(1, 2, 3),
+    )
 }

@@ -40,6 +40,8 @@ Type tags:
     0x03  message
 
 `author` is 8 random bits assigned once per install (see ADR-004).
+**`author = 0` is reserved** for the nil ID `0x00000000`; real objects use
+`1..255`, and the codec rejects any other ID with author 0.
 `counter` is per-author, monotonically increasing, wraps at 2^16.
 
 ## Flags (1 byte)
@@ -54,13 +56,16 @@ Type tags:
 
     [ id 4B ][ predecessor 4B ][ flags 1B ][ latE7 4B ][ lonE7 4B ][ nameLen 1B ][ name N B ]
 
-- `predecessor`: `0x00000000` means standalone pin or first route point
-  (F-30/F-35). Otherwise the ID of the point this one chains from.
+- `predecessor`: `0x00000000` (the nil ID) means standalone pin or first
+  route point (F-30/F-35). Otherwise the ID of the point this one chains
+  from. The nil ID cannot collide with a real object because author 0 is
+  reserved (see "Object ID" above).
 - `latE7` / `lonE7`: signed 32-bit, degrees × 10^7.
 - `name`: UTF-8, 0–40 bytes.
 
-Fixed size before `name`: 18 B. Worst case with a 40-byte name: **58 B**.
-That leaves 172 B of the 230 B payload free for multi-point packing.
+Fixed size before `name`: 20 B (including the 2-byte envelope). Worst case
+with a 40-byte name: **60 B**. That leaves 170 B of the 230 B payload free
+for multi-point packing.
 
 **F-32:** multi-point route packing — not implemented yet.
 Proposed: a Route packet carries a `count` byte and delta-coded points
@@ -74,7 +79,7 @@ Proposed: a Route packet carries a `count` byte and delta-coded points
 - `ref`: `0x00000000` = no reference, else an Object ID (F-52).
 - `text`: UTF-8, 1–180 bytes.
 
-Worst case: 4+1+4+4+1+180 = **194 B**. Fits, with headroom.
+Worst case: 2+4+1+4+4+1+180 = **196 B**. Fits, with headroom.
 
 ## Digest body (F-83)
 
@@ -84,7 +89,8 @@ Worst case: 4+1+4+4+1+180 = **194 B**. Fits, with headroom.
 - `filterBytes`: the digest payload (currently a Bloom filter, per
   `packages/sync/TODO.md`).
 
-Fixed overhead: 5 B. Filter capped at **40 B** (≤ 230 B total packet).
+Fixed overhead: 7 B (including the 2-byte envelope). Filter capped at
+**40 B** (≤ 230 B total packet).
 
 ## Airtime budget (F-84)
 

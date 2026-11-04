@@ -62,7 +62,10 @@ Object IDs carry an 8-bit author ID. In small groups (3–10) random
 collisions are unlikely but not impossible.
 
 ### Proposal
-- Each install picks a random 1-byte author ID at first launch, persisted.
+- Each install picks a random author ID in `1..255` at first launch,
+  persisted. `0` is reserved for the nil object ID `0x00000000` used for
+  "no predecessor" / "no reference", so the sentinel can never collide
+  with a real object.
 - On ingest, if the author byte matches ours but the counter was not issued
   by us, log a warning and show a small "ID conflict" banner.
 - "Re-roll my author ID" button in settings. Existing objects keep their

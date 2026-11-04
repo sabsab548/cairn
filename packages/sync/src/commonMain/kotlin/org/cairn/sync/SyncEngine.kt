@@ -20,7 +20,9 @@ import org.cairn.protocol.PointPacket
  *   - airtime throttling (see F-84 / Priority.kt, TODO)
  */
 class SyncEngine(
-    private val now: () -> Long = { 0L },
+    // Required, not defaulted: a `{ 0L }` default made every update look
+    // stale and silently dropped it.
+    private val now: () -> Long,
 ) {
 
     /** What we know about one object. */

@@ -40,16 +40,22 @@ data class ObjectId(
             require(offset >= 0 && buf.size - offset >= SIZE) {
                 "buffer too short: need $SIZE bytes at offset $offset, have ${buf.size}"
             }
-            return ObjectId(
+            val id = ObjectId(
                 type = ObjectType.fromTag(buf[offset]),
                 authorId = buf[offset + 1],
                 counter = ((buf[offset + 2].toInt() and 0xFF) shl 8) or
                           (buf[offset + 3].toInt() and 0xFF),
             )
+            require(id == NONE || id.authorId.toInt() != 0) {
+                "authorId 0 is reserved for ObjectId.NONE"
+            }
+            return id
         }
 
-        /** Sentinel used in the wire format for "no predecessor".
-         *  Must use UserPosition (tag 0x00) so it decodes as 0x00000000.
+        /** Sentinel used in the wire format for "no predecessor" / "no reference".
+         *  UserPosition (tag 0x00) makes it decode as `0x00000000`. Author ID 0
+         *  is reserved for this sentinel: real objects must use `1..255`, so
+         *  [fromBytes] rejects any other ID with author 0.
          */
         val NONE = ObjectId(ObjectType.UserPosition, 0, 0)
     }

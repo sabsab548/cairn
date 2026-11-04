@@ -53,11 +53,25 @@ data class TombstonePacket(
     override val size: Int = 2 + ObjectId.SIZE * 2 + 4 // 14
 }
 
-/** Digest (F-83): "here is what I have" — compact filter over known IDs. */
-data class DigestPacket(
+/**
+ * Digest (F-83): "here is what I have" — compact filter over known IDs.
+ *
+ * Not a `data class`: the generated `equals`/`hashCode` would compare the
+ * [filterBytes] array by reference, which breaks dedupe and round-trip tests.
+ */
+class DigestPacket(
     override val id: ObjectId,
     val filterBytes: ByteArray,
 ) : Packet() {
     override val size: Int = 2 + ObjectId.SIZE + 1 + filterBytes.size
+
+    override fun equals(other: Any?): Boolean =
+        this === other ||
+            (other is DigestPacket && id == other.id && filterBytes.contentEquals(other.filterBytes))
+
+    override fun hashCode(): Int = 31 * id.hashCode() + filterBytes.contentHashCode()
+
+    override fun toString(): String =
+        "DigestPacket(id=$id, filterBytes=${filterBytes.contentToString()})"
 }
 

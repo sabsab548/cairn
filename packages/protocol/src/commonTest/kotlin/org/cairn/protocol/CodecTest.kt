@@ -1,5 +1,6 @@
 package org.cairn.protocol
 
+import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -18,6 +19,25 @@ class CodecTest {
         latE7 = 470_123_456,
         lonE7 = 8_123_456,
         name = name,
+    )
+
+    private fun sampleMessage() = MessagePacket(
+        id = id(10, ObjectType.Message),
+        senderId = 7,
+        timestampSec = 12_345,
+        referencedObject = id(1),
+        text = "meet at the ridge",
+    )
+
+    private fun sampleTombstone() = TombstonePacket(
+        id = id(1, ObjectType.Message),
+        targetId = id(42),
+        timestampSec = 98_765,
+    )
+
+    private fun sampleDigest() = DigestPacket(
+        id = id(99, ObjectType.Message),
+        filterBytes = byteArrayOf(1, 2, 3),
     )
 
     @Test
@@ -134,18 +154,38 @@ class CodecTest {
 
     @Test
     fun fuzz_decode_only_ila_error() {
-        val seed = 12345L
-        for (i in 0 until 10_000) {
-            val len = (seed + i).toInt() and 0xFF
-            val data = ByteArray(len) { ((seed + i * 7 + it * 13) and 0xFF).toByte() }
-            val result = runCatching { Codec.decode(data) }
-            // must either succeed or throw IllegalArgumentException
-            if (result.isFailure) {
-                assertTrue(
-                    result.exceptionOrNull() is IllegalArgumentException,
-                    "unexpected exception for len=$len: ${result.exceptionOrNull()!!.javaClass}",
-                )
-            }
+        val rnd = Random(42)
+        repeat(20_000) {
+            val data = ByteArray(rnd.nextInt(0, Codec.MAX_PACKET_BYTES + 2)) { rnd.nextInt().toByte() }
+            // Valid version, then every known kind plus 0x05 (unknown) so the
+            // sub-decoders are actually reached. (The previous version built
+            // kind = version + 13 and never decoded anything at all.)
+            if (data.isNotEmpty()) data[0] = Codec.VERSION
+            if (data.size > 1) data[1] = (1 + rnd.nextInt(5)).toByte()
+            assertDecodeFailsCleanly(data)
+        }
+    }
+
+    @Test
+    fun every_truncation_of_a_valid_packet_fails_cleanly() {
+        listOf(
+            samplePoint(),
+            samplePoint(name = null),
+            samplePoint(name = "camp").copy(flags = Flags(hasExpiry = true), expirySec = 1_000),
+            sampleMessage(),
+            sampleTombstone(),
+            sampleDigest(),
+        ).map(Codec::encode).forEach { bytes ->
+            for (n in 0 until bytes.size) assertDecodeFailsCleanly(bytes.copyOf(n))
+        }
+    }
+
+    private fun assertDecodeFailsCleanly(bytes: ByteArray) {
+        runCatching { Codec.decode(bytes) }.exceptionOrNull()?.let {
+            assertTrue(
+                it is IllegalArgumentException,
+                "unexpected exception: $it (input: ${bytes.contentToString()})",
+            )
         }
     }
 
@@ -233,5 +273,32 @@ class CodecTest {
             filterBytes = ByteArray(Codec.MAX_DIGEST_BYTES + 1) { 0.toByte() },
         )
         assertFailsWith<IllegalArgumentException> { Codec.encode(d) }
+    }
+
+    @Test
+    fun flags_byte_matches_protocol_layout() {
+        assertEquals(0x00.toByte(), Flags().toByte())
+        assertEquals(0x01.toByte(), Flags(closed = true).toByte())
+        assertEquals(0x02.toByte(), Flags(deleted = true).toByte())
+        assertEquals(0x04.toByte(), Flags(emergency = true).toByte())
+        assertEquals(0x08.toByte(), Flags(hasExpiry = true).toByte())   // PROTOCOL.md bit 3
+    }
+
+    @Test
+    fun oversized_name_on_wire_rejected() {
+        val base = Codec.encode(samplePoint(name = "x".repeat(Codec.MAX_NAME_BYTES)))
+        val bytes = base.copyOf(base.size + 1)
+        bytes[19] = (Codec.MAX_NAME_BYTES + 1).toByte()   // nameLen
+        assertFailsWith<IllegalArgumentException> { Codec.decode(bytes) }
+    }
+
+    @Test
+    fun oversized_text_on_wire_rejected() {
+        val base = Codec.encode(
+            MessagePacket(id(99, ObjectType.Message), 1, 0, null, "y".repeat(Codec.MAX_TEXT_BYTES)),
+        )
+        val bytes = base.copyOf(base.size + 1)
+        bytes[15] = (Codec.MAX_TEXT_BYTES + 1).toByte()   // textLen
+        assertFailsWith<IllegalArgumentException> { Codec.decode(bytes) }
     }
 }

@@ -3,21 +3,21 @@
 ## Wire format
 
 - [ ] F-32 multi-point route packing (see PROTOCOL.md "TODO (F-32)")
-- [ ] F-40 optional expiry field
-- [ ] F-41 tombstone packet kind 0x03
-- [ ] F-83 digest packet kind 0x04
-- [ ] Predecessor == `0x00000000` sentinel collides with author=0/counter=0.
-      Pick a cleaner "no predecessor" marker and migrate the codec. See
-      the corresponding comment in `Codec.kt`.
+- [x] F-40 optional expiry field
+- [x] F-41 tombstone packet kind 0x03
+- [x] F-83 digest packet kind 0x04
+- [x] Predecessor sentinel: author 0 is now reserved for `0x00000000`, and
+      `ObjectId.fromBytes` rejects any other ID with author 0. See
+      `docs/PROTOCOL.md` and `docs/DECISIONS.md` (ADR-004).
 
 ## Testing
 
-- [ ] Worst-case size assertions for every packet kind (long names, high
+- [x] Worst-case size assertions for every packet kind (long names, high
       lat/lon magnitude, UTF-8 multi-byte names)
-- [ ] Fuzz round-trip: random bytes into `decode` must never throw
+- [x] Fuzz round-trip: random bytes into `decode` must never throw
       unexpected exceptions (only `IllegalArgumentException`)
-- [ ] Test that unknown `version` is rejected
-- [ ] Test that unknown `kind` is dropped silently
+- [x] Test that unknown `version` is rejected
+- [x] Test that unknown `kind` is dropped silently
 
 ## API
 

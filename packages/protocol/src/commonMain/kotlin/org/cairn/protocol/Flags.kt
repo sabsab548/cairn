@@ -23,7 +23,7 @@ data class Flags(
         const val MASK_CLOSED: Int = 0x01
         const val MASK_DELETED: Int = 0x02
         const val MASK_EMERGENCY: Int = 0x04
-        const val MASK_HAS_EXPIRY: Int = 0x10
+        const val MASK_HAS_EXPIRY: Int = 0x08
 
         fun fromByte(b: Byte): Flags {
             val v = b.toInt() and 0xFF

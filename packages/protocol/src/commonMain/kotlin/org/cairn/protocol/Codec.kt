@@ -82,6 +82,8 @@ object Codec {
     }
 
     private fun decodePoint(b: ByteArray): PointPacket {
+        // 2 + id + predecessor + flags + lat + lon + nameLen
+        require(b.size >= 2 + ObjectId.SIZE * 2 + 1 + 4 + 4 + 1) { "point packet truncated" }
         var o = 2
         val id = ObjectId.fromBytes(b, o); o += ObjectId.SIZE
 
@@ -91,8 +93,8 @@ object Codec {
         val flags = Flags.fromByte(b[o++])
         val lat = readInt32(b, o); o += 4
         val lon = readInt32(b, o); o += 4
-        require(o < b.size) { "point packet truncated before nameLen" }
         val nameLen = b[o++].toInt() and 0xFF
+        require(nameLen <= MAX_NAME_BYTES) { "point name too long: $nameLen > $MAX_NAME_BYTES" }
         require(o + nameLen <= b.size) { "point name truncated" }
         val name = if (nameLen == 0) null else b.copyOfRange(o, o + nameLen).decodeToString()
         o += nameLen
@@ -130,14 +132,16 @@ object Codec {
     }
 
     private fun decodeMessage(b: ByteArray): MessagePacket {
+        // 2 + id + sender + ts + ref + textLen
+        require(b.size >= 2 + ObjectId.SIZE + 1 + 4 + ObjectId.SIZE + 1) { "message packet truncated" }
         var o = 2
         val id = ObjectId.fromBytes(b, o); o += ObjectId.SIZE
         val sender = b[o++]
         val ts = readInt32(b, o); o += 4
         val refRaw = ObjectId.fromBytes(b, o); o += ObjectId.SIZE
         val ref = if (refRaw == ObjectId.NONE) null else refRaw
-        require(o < b.size) { "message packet truncated before textLen" }
         val len = b[o++].toInt() and 0xFF
+        require(len <= MAX_TEXT_BYTES) { "message too long: $len > $MAX_TEXT_BYTES" }
         require(o + len <= b.size) { "message text truncated" }
         val text = b.copyOfRange(o, o + len).decodeToString()
         require(text.isNotEmpty()) { "empty message text" }
@@ -161,9 +165,10 @@ object Codec {
     }
 
     private fun decodeDigest(b: ByteArray): DigestPacket {
+        // 2 + id + filterLen
+        require(b.size >= 2 + ObjectId.SIZE + 1) { "digest packet truncated" }
         var o = 2
         val id = ObjectId.fromBytes(b, o); o += ObjectId.SIZE
-        require(o < b.size) { "digest truncated before filterLen" }
         val filterLen = b[o++].toInt() and 0xFF
         require(filterLen <= MAX_DIGEST_BYTES) {
             "digest filter too large: $filterLen > $MAX_DIGEST_BYTES"
@@ -187,6 +192,7 @@ object Codec {
     }
 
     private fun decodeTombstone(b: ByteArray): TombstonePacket {
+        require(b.size >= 2 + ObjectId.SIZE * 2 + 4) { "tombstone packet truncated" }
         var o = 2
         val id = ObjectId.fromBytes(b, o); o += ObjectId.SIZE
         val targetId = ObjectId.fromBytes(b, o); o += ObjectId.SIZE
