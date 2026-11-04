@@ -23,8 +23,8 @@ One Cairn packet = one Meshtastic payload. **Hard limit: 230 bytes** (N-05).
 - `kind`:
   - `0x01` Point
   - `0x02` Message
-  - `0x03` Tombstone (F-41) — **TODO, not in v0.1**
-  - `0x04` Digest (F-83) — **TODO, not in v0.1**
+  - `0x03` Tombstone (F-41)
+  - `0x04` Digest (F-83)
 
 Unknown `kind` → drop silently.
 
@@ -47,7 +47,8 @@ Type tags:
     bit 0  closed      (route is a polygon / area)
     bit 1  deleted     (tombstone)
     bit 2  emergency   (F-60)
-    bit 3..7 reserved — send as 0, ignore on receive
+    bit 3  hasExpiry   (F-40 — optional 4 B expiry field after name)
+    bit 4..7 reserved — send as 0, ignore on receive
 
 ## Point body
 
@@ -61,11 +62,9 @@ Type tags:
 Fixed size before `name`: 18 B. Worst case with a 40-byte name: **58 B**.
 That leaves 172 B of the 230 B payload free for multi-point packing.
 
-**TODO (F-32):** multi-point route packing. Proposed: a Route packet carries
-a `count` byte and delta-coded points (2×2 B per point after the first).
-Not implemented yet — see `packages/protocol/TODO.md`.
-
-**TODO (F-40):** optional expiry field (4 B). Not implemented yet.
+**F-32:** multi-point route packing — not implemented yet.
+Proposed: a Route packet carries a `count` byte and delta-coded points
+(2×2 B per point after the first). See `packages/protocol/TODO.md`.
 
 ## Message body
 
@@ -76,6 +75,16 @@ Not implemented yet — see `packages/protocol/TODO.md`.
 - `text`: UTF-8, 1–180 bytes.
 
 Worst case: 4+1+4+4+1+180 = **194 B**. Fits, with headroom.
+
+## Digest body (F-83)
+
+    [ id 4B ][ filterLen 1B ][ filterBytes N B ]
+
+- `filterLen`: number of bytes in the filter (0–40).
+- `filterBytes`: the digest payload (currently a Bloom filter, per
+  `packages/sync/TODO.md`).
+
+Fixed overhead: 5 B. Filter capped at **40 B** (≤ 230 B total packet).
 
 ## Airtime budget (F-84)
 

@@ -3,7 +3,6 @@ package org.cairn.sync
 import org.cairn.protocol.ObjectId
 import org.cairn.protocol.Packet
 import org.cairn.protocol.PointPacket
-import org.cairn.protocol.MessagePacket
 
 /**
  * Pure, platform-independent state machine.
@@ -44,7 +43,7 @@ class SyncEngine(
      * Both the wire-level and the app-level path go through this method.
      */
     fun ingest(packet: Packet, receivedAtMs: Long = now()): List<Event> {
-        val id = idOf(packet)
+        val id = packet.id
 
         // F-80: exact duplicate
         val existing = objects[id]
@@ -59,9 +58,10 @@ class SyncEngine(
 
         // Register pending references BEFORE resolving, so out-of-order
         // arrival (point first, predecessor second) is also handled.
-        if (packet is PointPacket && packet.predecessor != null) {
-            if (packet.predecessor !in objects) {
-                pendingRefs.getOrPut(packet.predecessor) { mutableListOf() }.add(id)
+        if (packet is PointPacket) {
+            val pred = packet.predecessor
+            if (pred != null && pred !in objects) {
+                pendingRefs.getOrPut(pred) { mutableListOf() }.add(id)
             }
         }
 
@@ -83,11 +83,6 @@ class SyncEngine(
     // TODO(F-41): ingest tombstone packets; re-broadcast to catch-up peers.
     // TODO(F-83): fun digest(): ByteArray — "here is what I have".
     // TODO(F-84): send queue with priority; see Priority.kt.
-
-    private fun idOf(p: Packet): ObjectId = when (p) {
-        is PointPacket   -> p.id
-        is MessagePacket -> p.id
-    }
 }
 
 /** Events emitted by the sync engine; the UI subscribes to these. */

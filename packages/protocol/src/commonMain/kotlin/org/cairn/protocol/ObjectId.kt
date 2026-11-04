@@ -48,7 +48,9 @@ data class ObjectId(
             )
         }
 
-        /** Sentinel used in the wire format for "no predecessor". */
-        val NONE = ObjectId(ObjectType.Unknown, 0, 0)
+        /** Sentinel used in the wire format for "no predecessor".
+         *  Must use UserPosition (tag 0x00) so it decodes as 0x00000000.
+         */
+        val NONE = ObjectId(ObjectType.UserPosition, 0, 0)
     }
 }
