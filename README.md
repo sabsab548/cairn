@@ -6,10 +6,9 @@ Cairn turns a group of phones + Meshtastic radios into a shared offline map:
 positions, pins, routes, areas, short messages. No server, no account, no
 cloud. Join a group with a channel key, done.
 
-- **Status:** pre-alpha. Nothing usable yet. See `TODO.md` and
-  `docs/ROADMAP.md` for where we are.
-- **Scope of v1:** see `docs/ARCHITECTURE.md` and the Lastenheft
-  (kept outside this repo for now — move it into `docs/Lastenheft.md`).
+- **Status:** pre-alpha. Android app skeleton exists but cannot yet talk to a
+  radio. See `TODO.md` and `docs/ROADMAP.md` for where we are.
+- **Scope of v1:** see `docs/ARCHITECTURE.md` and `docs/Lastenheft.md`.
 
 ## Why not X?
 
@@ -38,11 +37,11 @@ apps/ios/            iOS app                     (Swift, AGPL-3.0)
 docs/                spec, architecture, ADRs, testing, roadmap
 ```
 
-## Building (once apps are wired)
+## Building
 
 ```bash
 ./gradlew :packages:protocol:jvmTest :packages:sync:jvmTest
-./gradlew :apps:android:assembleDebug       # TODO: see apps/android/TODO.md
+./gradlew :apps:android:app:assembleDebug
 ```
 
 ## License

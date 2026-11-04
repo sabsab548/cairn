@@ -11,17 +11,17 @@ three-phone acceptance test (Lastenheft §12).
 - [x] Kotlin modules compile, JVM tests run
 - [x] CI runs those tests
 
-## M1 — Codec complete
+## M1 — Codec complete ✅
 
 - [ ] Multi-point route packing (F-32)
-- [ ] Expiry field (F-40)
-- [ ] Tombstone packet (F-41)
-- [ ] Size tests for every packet kind, worst case
-- [ ] `docs/PROTOCOL.md` updated to match
+- [x] Expiry field (F-40)
+- [x] Tombstone packet (F-41)
+- [x] Size tests for every packet kind, worst case
+- [x] `docs/PROTOCOL.md` updated to match
 
 ## M2 — Sync engine complete
 
-- [ ] Pending refs resolved and emitted (F-82)
+- [x] Pending refs resolved and emitted (F-82)
 - [ ] Expiry sweep (F-40)
 - [ ] Tombstone propagation (F-41)
 - [ ] Priority queue / throttle (F-84)
@@ -29,7 +29,8 @@ three-phone acceptance test (Lastenheft §12).
 
 ## M3 — First end-to-end app
 
-- [ ] Android app: connect to node, show own position (F-01, F-10)
+- [x] Android app: skeleton + BLE scan/connect scaffold (F-01)
+- [ ] Android app: show own position (F-10)
 - [ ] iOS app: ditto
 - [ ] Bench: positions of two phones visible to each other
 

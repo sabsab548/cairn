@@ -25,7 +25,7 @@ jobs:
         run: ./gradlew :packages:protocol:jvmTest :packages:sync:jvmTest --no-daemon
 
   android-build:
-    name: Android build (stub)
+    name: Android build
     runs-on: ubuntu-latest
     needs: jvm-tests
     steps:
@@ -35,10 +35,8 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
-      - name: Placeholder
-        # TODO(android): replace with `./gradlew :apps:android:assembleDebug`
-        # once the Android module exists. See apps/android/TODO.md.
-        run: echo "Android module not wired yet — see apps/android/TODO.md"
+      - name: Assemble debug APK
+        run: ./gradlew :apps:android:app:assembleDebug --no-daemon
 
   ios-build:
     name: iOS framework (stub)

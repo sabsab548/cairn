@@ -2,11 +2,11 @@
 
 ## Missing entirely (blocker for v1)
 
-- [ ] Real Gradle module (`apps/android/build.gradle.kts`, `app/build.gradle.kts`,
+- [x] Real Gradle module (`apps/android/app/build.gradle.kts`,
       `settings.gradle.kts` inclusion in root).
-- [ ] `AndroidManifest.xml` with Bluetooth permissions and foreground service.
-- [ ] `MainActivity` + a minimal Compose scaffold.
-- [ ] `RadioTransport` implementation using `BluetoothGatt` against a
+- [x] `AndroidManifest.xml` with Bluetooth permissions and foreground service.
+- [x] `MainActivity` + a minimal Compose scaffold.
+- [x] `RadioTransport` implementation using `BluetoothGatt` against a
       Meshtastic node. This is the highest-risk piece; see ADR-003.
 - [ ] SQLite persistence via Room (`Store` interface from `packages/sync`).
 

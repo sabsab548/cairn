@@ -1,0 +1,22 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Stone stack icon on slate background -->
+    <path
+        android:fillColor="#3D4A52"
+        android:pathData="M0,0h108v108h-108z" />
+    <!-- bottom stone -->
+    <path
+        android:fillColor="#D9631E"
+        android:pathData="M38,68h32c3,0 6,3 6,6v2c0,3 -3,6 -6,6h-32c-3,0 -6,-3 -6,-6v-2c0,-3 3,-6 6,-6z" />
+    <!-- middle stone -->
+    <path
+        android:fillColor="#D9631E"
+        android:pathData="M43,52h22c3,0 5,2 5,5v1c0,3 -2,5 -5,5h-22c-3,0 -5,-2 -5,-5v-1c0,-3 2,-5 5,-5z" />
+    <!-- top stone -->
+    <path
+        android:fillColor="#D9631E"
+        android:pathData="M48,38h12c2,0 4,2 4,4v1c0,2 -2,4 -4,4h-12c-2,0 -4,-2 -4,-4v-1c0,-2 2,-4 4,-4z" />
+</vector>

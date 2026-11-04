@@ -4,6 +4,9 @@ plugins {
 
 kotlin {
     jvm()
+    android {
+        publishLibraryVariants("release")
+    }
     iosArm64()
     iosSimulatorArm64()
     iosX64()
