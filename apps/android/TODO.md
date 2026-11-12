@@ -8,6 +8,13 @@
 - [x] `MainActivity` + a minimal Compose scaffold.
 - [x] `RadioTransport` implementation using `BluetoothGatt` against a
       Meshtastic node. This is the highest-risk piece; see ADR-003.
+- [x] `RadioTransport` interface is shared (`packages/sync`) and the
+      Meshtastic protobuf layer is shared (`packages/meshtastic`, ADR-007).
+- [ ] Finish the BLE driver: it is still a skeleton. Implement
+      `MeshtasticLink` over GATT and wrap it in `MeshtasticRadio` instead of
+      decoding `FromRadio` inline — that deletes the remaining TODO in
+      `MeshtasticBleDriver.onFromRadioChanged`. Needs the CCCD write, MTU
+      request and a FromRadio read loop.
 - [ ] SQLite persistence via Room (`Store` interface from `packages/sync`).
 
 ## Planned module layout (suggested)

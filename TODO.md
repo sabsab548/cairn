@@ -5,7 +5,9 @@ folder they belong to:
 
 - `packages/protocol/TODO.md`
 - `packages/sync/TODO.md`
+- `packages/meshtastic/TODO.md`
 - `apps/android/TODO.md`
+- `apps/desktop/README.md` (harness usage; no separate TODO yet)
 - `apps/ios/TODO.md`
 
 ## Not written yet (blockers before v1)

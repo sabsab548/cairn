@@ -20,9 +20,10 @@
 
 ## Design gaps
 
-- [ ] `RadioTransport` interface not yet defined. Suggestion: keep it tiny —
-      `connect`, `send`, `onReceive`, `onState`. Define it in `commonMain`
-      so the sync engine never imports BLE types.
+- [x] `RadioTransport` interface defined in `commonMain` (`RadioTransport.kt`),
+      so the sync engine never imports BLE types. Implementations:
+      `MeshtasticRadio` in `packages/meshtastic` (shared protobuf layer) and the
+      Android GATT driver; the desktop harness adds serial/TCP links below it.
 - [ ] Clocks: conflict resolution no longer needs one (the stamp is in the
       packet, ADR-006). The apps still need a physical clock for
       `HybridClock.physicalNowSec` (seconds since 2026-01-01), for F-40 expiry

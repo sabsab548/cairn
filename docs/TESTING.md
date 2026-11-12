@@ -5,7 +5,7 @@
 ### 1. CI tests — every PR, no devices
 
 Everything that can be pure logic is pure logic, and lives in
-`packages/protocol` / `packages/sync`. On every PR:
+`packages/protocol` / `packages/sync` / `packages/meshtastic`. On every PR:
 
 - Round-trip encode/decode for every packet kind
 - Exact size assertions per packet kind (worst case pinned to PROTOCOL.md)
@@ -13,6 +13,10 @@ Everything that can be pure logic is pure logic, and lives in
 - Sync engine: dedupe, latest-wins, pending refs, tombstones
 - Convergence: the same versions in **every** delivery order give the same
   state (see ADR-006 — this is the test that makes latest-wins real)
+- Meshtastic link: protobuf primitives, message round trips, unknown-field
+  skipping, `0x94 0xC3` framing/resync, handshake and port filtering
+- Desktop harness: `LinkSpec` parsing, `TcpLink` against a local server, and the
+  full mock-node pipeline (`apps/desktop`)
 - Android compile (once the module exists)
 - iOS framework link (once the module exists)
 
@@ -42,6 +46,10 @@ Run this on the bench before every release tag.
 
 - `./gradlew :packages:protocol:jvmTest`
 - `./gradlew :packages:sync:jvmTest`
+- `./gradlew :packages:meshtastic:jvmTest`
+- `./gradlew :apps:desktop:desktopTest`
+- `./gradlew :apps:desktop:runHarness --args="--link mock"` — the whole
+  pipeline against an in-process fake node (see `apps/desktop/README.md`)
 
 If your feature is not covered by one of those, ask yourself whether it
 could be, before giving up and reaching for a device.

@@ -17,10 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -28,7 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import org.cairn.android.ble.MeshtasticBleDriver
-import org.cairn.android.transport.RadioTransport
+import org.cairn.sync.RadioTransport
 
 class MainActivity : ComponentActivity() {
 
@@ -64,12 +61,19 @@ class MainActivity : ComponentActivity() {
             CairnTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     CairnScreen(
+                        state = transport.state.collectAsState().value,
                         onConnect = { onConnectClicked() },
                         onDisconnect = { transport.disconnect() },
                     )
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // Drop the GATT connection instead of leaking it across recreation.
+        transport.disconnect()
     }
 
     private fun onConnectClicked() {
@@ -91,17 +95,27 @@ fun CairnTheme(content: @Composable () -> Unit) {
 
 @Composable
 fun CairnScreen(
+    state: RadioTransport.State = RadioTransport.State.Disconnected,
     onConnect: () -> Unit = {},
     onDisconnect: () -> Unit = {},
 ) {
-    var status by remember { mutableStateOf("Not connected") }
-    var permissionNote by remember {
-        mutableStateOf(
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-                "BLUETOOTH_SCAN / BLUETOOTH_CONNECT required"
-            else
-                "BLUETOOTH + location permission required"
-        )
+    val status = when (state) {
+        RadioTransport.State.Disconnected -> "Not connected"
+        RadioTransport.State.Scanning -> "Scanning for a Meshtastic node…"
+        RadioTransport.State.Connecting -> "Connecting…"
+        is RadioTransport.State.Connected ->
+            state.nodeName?.let { "Connected to $it" } ?: "Connected"
+        is RadioTransport.State.Error -> state.message
+    }
+
+    val busy = state is RadioTransport.State.Scanning ||
+        state is RadioTransport.State.Connecting ||
+        state is RadioTransport.State.Connected
+
+    val permissionNote = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        "BLUETOOTH_SCAN / BLUETOOTH_CONNECT required"
+    } else {
+        "BLUETOOTH + location permission required"
     }
 
     Column(
@@ -127,19 +141,16 @@ fun CairnScreen(
 
         Spacer(modifier = Modifier.height(64.dp))
 
-        Button(onClick = {
-            status = "Scanning…"
-            onConnect()
-        }) {
+        Button(onClick = onConnect, enabled = !busy) {
             Text("Connect to radio")
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Button(onClick = {
-            status = "Not connected"
-            onDisconnect()
-        }) {
+        Button(
+            onClick = onDisconnect,
+            enabled = state !is RadioTransport.State.Disconnected
+        ) {
             Text("Disconnect")
         }
 

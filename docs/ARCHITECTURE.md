@@ -26,8 +26,14 @@
 │ - onReceive(ByteArray)              │
 │ - onStateChanged(...)               │
 ├─────────────────────────────────────┤
-│ BLE driver (native)                 │   apps/android (BluetoothGatt)
+│ Meshtastic link codec (pure logic)  │   packages/meshtastic (CI-tested)
+│ - ToRadio/FromRadio protobuf subset │
+│ - 0x94 0xC3 stream framing          │
+│ - MeshtasticRadio : RadioTransport  │
+├─────────────────────────────────────┤
+│ BLE / serial / TCP driver (native)  │   apps/android (BluetoothGatt)
 │                                     │   apps/ios (CoreBluetooth)
+│                                     │   apps/desktop (serial, TCP)
 ├─────────────────────────────────────┤
 │ Persistence (SQLite)                │   apps/*  (Room / SQLite.swift)
 └─────────────────────────────────────┘
@@ -36,6 +42,11 @@
 **Rule:** everything above the `RadioTransport` line is pure logic and MUST
 be tested in CI on JVM. Everything below the line is platform-specific and
 is exercised only on the physical test bench.
+
+`packages/meshtastic` sits just below the seam (it *implements*
+`RadioTransport`) but contains no platform types: its protobuf codec and stream
+framing are pure Kotlin and JVM-tested. Only the socket/tty/GATT that moves the
+bytes is bench-only (ADR-007).
 
 ## Why this split (see ADR-001 and ADR-003)
 

@@ -19,8 +19,8 @@ import android.os.ParcelUuid
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import org.cairn.android.transport.RadioTransport
 import org.cairn.protocol.Codec
+import org.cairn.sync.RadioTransport
 import org.cairn.protocol.Packet
 import java.util.UUID
 
@@ -29,9 +29,10 @@ import java.util.UUID
  *
  * This is intentionally a minimal skeleton: it scans for the Meshtastic service,
  * connects, discovers characteristics, and provides hooks to send/receive
- * Cairn packets. The real Meshtastic protocol (ToRadio/FromRadio, position,
- * nodeinfo, channel config, etc.) is not implemented here; that requires
- * protobuf negotiation and is out of scope for the first milestone.
+ * Cairn packets. The Meshtastic protobuf layer (ToRadio/FromRadio, node info,
+ * channel config, …) lives platform-independently in `packages/meshtastic`;
+ * this class only has to move bytes between that codec and the GATT
+ * characteristics.
  */
 class MeshtasticBleDriver(
     private val context: Context,
@@ -195,6 +196,9 @@ class MeshtasticBleDriver(
                 val fromNum = service.getCharacteristic(fromNumUuid)
 
                 // Request notifications on FromNum to learn when FromRadio has data.
+                // TODO(ble): also write the CCCD descriptor, request an MTU, and
+                //       read FromRadio when FromNum notifies. Until then no data
+                //       arrives on a real node.
                 if (fromNum != null) {
                     gatt.setCharacteristicNotification(fromNum, true)
                 }
@@ -202,17 +206,30 @@ class MeshtasticBleDriver(
                 emitState(RadioTransport.State.Connected(gatt.device?.name))
             }
 
+            // API < 33 delivers values through this overload only.
+            @Suppress("DEPRECATION")
+            override fun onCharacteristicChanged(
+                gatt: BluetoothGatt,
+                characteristic: BluetoothGattCharacteristic
+            ) {
+                onFromRadioChanged(characteristic, characteristic.value ?: ByteArray(0))
+            }
+
             override fun onCharacteristicChanged(
                 gatt: BluetoothGatt,
                 characteristic: BluetoothGattCharacteristic,
                 value: ByteArray
             ) {
-                if (characteristic.uuid == fromRadioUuid) {
-                    // TODO: decode Meshtastic FromRadio protobuf, extract app
-                    //       port payload, Codec.decode(bytes), onReceive(packet)
-                }
+                onFromRadioChanged(characteristic, value)
             }
         })
+    }
+
+    private fun onFromRadioChanged(characteristic: BluetoothGattCharacteristic, value: ByteArray) {
+        if (characteristic.uuid == fromRadioUuid) {
+            // TODO: decode Meshtastic FromRadio protobuf, extract app
+            //       port payload, Codec.decode(bytes), onReceive(packet)
+        }
     }
 
     private fun emitState(newState: RadioTransport.State) {

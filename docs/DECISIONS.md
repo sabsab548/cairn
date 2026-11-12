@@ -176,3 +176,51 @@ versions of the same object. A version has to be carried explicitly.
 - **Author-only writes for user positions** (`type 0x00`): a position is a
   claim about a person, so a peer overwriting it is odd. In practice IDs are
   per-author, so this only bites on an author-ID collision. Not enforced yet.
+
+---
+
+## ADR-007 — Desktop harness and a shared Meshtastic link layer
+
+**Date:** 2026-11-12 · **Status:** Accepted
+
+### Context
+
+Development was gated on a phone plus a paired radio, which makes the
+highest-risk code (the radio link) the hardest to iterate on. ADR-003 put the
+BLE driver below the `RadioTransport` line and kept everything above it pure,
+but the Android driver still said "TODO: decode Meshtastic FromRadio protobuf":
+the codec existed, the Meshtastic envelope did not.
+
+A PC can reach a Meshtastic node over USB serial or TCP/4403, both of which
+speak the exact same `ToRadio`/`FromRadio` protobuf stream that BLE does.
+
+### Decision
+
+1. **One shared Meshtastic layer** (`packages/meshtastic`, pure KMP): the
+   subset of the protobuf messages Cairn needs, the `0x94 0xC3` stream framing
+   and `MeshtasticRadio : RadioTransport`. No protobuf runtime, no BLE types;
+   unknown fields are skipped so firmware updates do not break us.
+2. **Desktop links are TCP and USB serial, not BLE.** BLE on Linux needs
+   BlueZ/D-Bus, a node accepts ~one BLE client, and none of it is testable in
+   CI. Serial/TCP have no permissions (beyond `dialout`), no exclusivity, and
+   the identical protocol on the wire. BLE becomes a `MeshtasticLink`
+   implementation later; the seam is already there.
+3. **The desktop app is a CLI harness**, on a `jvm("desktop")` target
+   (the layout Compose Desktop uses) so a UI can be added without moving
+   source sets.
+4. **Cairn's app port defaults to 256** (Meshtastic `PRIVATE_APP`, inside
+   F-02's 256–511 range) and is configurable (`--port`); every peer must agree.
+
+### Consequences
+
+- ✅ The whole pipeline except the socket/tty itself is JVM-tested: protobuf
+  round-trips, framing resync, handshake, port filtering and the sync engine.
+- ✅ Android gets the protobuf layer for free; the driver only has to move
+  bytes over GATT. ADR-003 still holds: no BLE in shared code.
+- ✅ A laptop with a USB cable is now a development environment; `--link mock`
+  needs no hardware at all.
+- ❌ BLE behaviour (pairing, reconnect, MTU) still cannot be exercised from a
+  PC. That remains bench-only, as ADR-003 already accepted.
+- ❌ Hand-rolled protobuf is a maintenance surface. It is small, pinned to
+  upstream field numbers and covered by tests, but it must be updated by hand
+  when a needed message changes.
